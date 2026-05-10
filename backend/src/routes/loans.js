@@ -28,6 +28,127 @@ async function calculateDueDate(checkoutDate) {
   return dueDate;
 }
 
+// ==================== 你的独有功能（保留） ====================
+
+// 按姓名查询借阅历史
+router.get('/by-name', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ success: false, message: '姓名不能为空' });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { name: name.trim() },
+      include: {
+        loans: {
+          orderBy: { checkoutDate: 'desc' },
+          include: {
+            copy: { include: { book: true } }
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: '未找到该用户' });
+    }
+
+    const fineRatePerDay = await getFineRatePerDay();
+    const decoratedLoans = user.loans.map((loan) => decorateLoanWithFine(loan, fineRatePerDay));
+
+    res.json({
+      success: true,
+      userInfo: {
+        id: user.id,
+        name: user.name,
+        studentId: user.studentId,
+        email: user.email,
+        role: user.role,
+        currentBorrowCount: decoratedLoans.filter((loan) => !loan.returnDate).length,
+      },
+      borrowHistory: decoratedLoans.map((loan) => ({
+        id: loan.id,
+        bookName: loan.copy?.book?.title || '未知图书',
+        bookCode: loan.copy?.barcode || '',
+        borrowDate: loan.checkoutDate,
+        dueDate: loan.dueDate,
+        returnDate: loan.returnDate,
+        status: loan.returnDate ? 'returned' : (loan.isOverdue ? 'overdue' : 'borrowed'),
+        isOverdue: loan.isOverdue,
+        overdueDays: loan.overdueDays,
+        estimatedFineAmount: loan.estimatedFineAmount,
+        fineAmount: Number(loan.fineAmount ?? 0),
+        fineForgiven: Boolean(loan.fineForgiven),
+      }))
+    });
+  } catch (error) {
+    console.error('查询借阅历史失败:', error);
+    res.status(500).json({ success: false, message: '服务器错误', error: error.message });
+  }
+});
+
+// 按学号查询借阅历史
+router.get('/by-studentId', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
+  try {
+    const { studentId } = req.query;
+    if (!studentId || studentId.trim() === '') {
+      return res.status(400).json({ success: false, message: '学号不能为空' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { studentId: studentId.trim() },
+      include: {
+        loans: {
+          orderBy: { checkoutDate: 'desc' },
+          include: {
+            copy: { include: { book: true } }
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: '未找到该用户' });
+    }
+
+    const fineRatePerDay = await getFineRatePerDay();
+    const decoratedLoans = user.loans.map((loan) => decorateLoanWithFine(loan, fineRatePerDay));
+
+    res.json({
+      success: true,
+      userInfo: {
+        id: user.id,
+        name: user.name,
+        studentId: user.studentId,
+        email: user.email,
+        role: user.role,
+        currentBorrowCount: decoratedLoans.filter((loan) => !loan.returnDate).length,
+      },
+      borrowHistory: decoratedLoans.map((loan) => ({
+        id: loan.id,
+        bookName: loan.copy?.book?.title || '未知图书',
+        bookCode: loan.copy?.barcode || '',
+        borrowDate: loan.checkoutDate,
+        dueDate: loan.dueDate,
+        returnDate: loan.returnDate,
+        status: loan.returnDate ? 'returned' : (loan.isOverdue ? 'overdue' : 'borrowed'),
+        isOverdue: loan.isOverdue,
+        overdueDays: loan.overdueDays,
+        estimatedFineAmount: loan.estimatedFineAmount,
+        fineAmount: Number(loan.fineAmount ?? 0),
+        fineForgiven: Boolean(loan.fineForgiven),
+      }))
+    });
+  } catch (error) {
+    console.error('查询借阅历史失败:', error);
+    res.status(500).json({ success: false, message: '服务器错误', error: error.message });
+  }
+});
+
+// ==================== 组长版本的核心功能 ====================
+
+// 搜索学生
 router.get('/users/search', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   try {
     const keyword = (req.query.keyword || '').trim();
@@ -75,6 +196,7 @@ router.get('/users/search', requireAuth, checkLibrarianOrAdmin, async (req, res)
   }
 });
 
+// 搜索图书
 router.get('/books/search', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   try {
     const keyword = (req.query.keyword || '').trim();
@@ -113,6 +235,7 @@ router.get('/books/search', requireAuth, checkLibrarianOrAdmin, async (req, res)
   }
 });
 
+// 扫描学生
 router.get('/users/scan', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   try {
     const { studentId } = req.query;
@@ -156,6 +279,7 @@ router.get('/users/scan', requireAuth, checkLibrarianOrAdmin, async (req, res) =
   }
 });
 
+// 扫描图书
 router.get('/books/scan', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   try {
     const { isbn } = req.query;
@@ -192,6 +316,7 @@ router.get('/books/scan', requireAuth, checkLibrarianOrAdmin, async (req, res) =
   }
 });
 
+// 扫描借阅记录
 router.get('/loans/scan', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   try {
     const { isbn } = req.query;
@@ -240,6 +365,7 @@ router.get('/loans/scan', requireAuth, checkLibrarianOrAdmin, async (req, res) =
   }
 });
 
+// 借书
 router.post('/lend', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   try {
     const { userId, bookId } = req.body;
@@ -289,7 +415,8 @@ router.post('/lend', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
         dueDate,
         fineAmount: 0,
         finePaid: false,
-        fineForgiven: false
+        fineForgiven: false,
+        renewCount: 0
       }
     });
 
@@ -309,6 +436,7 @@ router.post('/lend', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   }
 });
 
+// 获取所有当前借阅记录
 router.get('/records', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   try {
     const fineRatePerDay = await getFineRatePerDay();
@@ -344,6 +472,7 @@ router.get('/records', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   }
 });
 
+// 还书
 router.post('/return', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   try {
     const { loanId, waiveFine } = req.body;
@@ -412,6 +541,7 @@ router.post('/return', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   }
 });
 
+// 我借的书（个人借阅历史）
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const fineRatePerDay = await getFineRatePerDay();
@@ -434,6 +564,11 @@ router.get('/me', requireAuth, async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: '获取借阅记录失败' });
   }
+});
+
+// 测试接口
+router.get('/test', (req, res) => {
+  res.json({ success: true, message: 'loans路由工作正常！', timestamp: new Date().toISOString() });
 });
 
 module.exports = router;

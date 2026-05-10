@@ -1,9 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
-const {
-  DEFAULT_FINE_RATE_PER_DAY,
-  calculateOverdueSummary,
-} = require('../src/lib/fines');
+const { DEFAULT_FINE_RATE_PER_DAY, calculateOverdueSummary } = require('../src/lib/fines');
+
 const prisma = new PrismaClient();
 
 // 配置常量
@@ -81,7 +79,7 @@ const BOOKS_DATA = [
     author: 'David Thomas & Andrew Hunt',
     isbn: '978-0201616224',
     genre: 'Technology',
-    description: 'A must-read for any programmer, filled with practical advice and best practices.',
+    description: 'A must-read for any programmer, filled with practical advice.',
     language: 'English',
   },
   {
@@ -122,7 +120,7 @@ const BOOKS_DATA = [
     author: 'Harper Lee',
     isbn: '978-0446310789',
     genre: 'Fiction',
-    description: 'A powerful story of racial injustice in the American South.',
+    description: 'A powerful story of racial injustice.',
     language: 'English',
   },
   {
@@ -213,7 +211,7 @@ const BOOKS_DATA = [
     author: 'Jim Collins',
     isbn: '978-0066620992',
     genre: 'Management',
-    description: 'Why some companies make the leap and others don\'t.',
+    description: 'Why some companies make the leap.',
     language: 'English',
   },
   {
@@ -245,22 +243,57 @@ const BOOKS_DATA = [
 
 // 系统配置
 const SYSTEM_CONFIGS = [
-  { key: 'FINE_RATE_PER_DAY', value: '0.50', description: '每日逾期罚款金额（元）' },
-  { key: 'MAX_BORROW_STUDENT', value: '3', description: '学生最大借阅数量' },
-  { key: 'LOAN_DURATION_DAYS', value: '30', description: '默认借阅天数' },
-  { key: 'MAX_RENEW_TIMES', value: '2', description: '最大续借次数' },
-  { key: 'RENEW_DURATION_DAYS', value: '15', description: '续借天数' },
-  { key: 'LIBRARY_NAME', value: '大学图书馆管理系统', description: '图书馆名称' },
-  { key: 'LIBRARY_HOURS', value: '周一至周五 8:00-22:00，周末 9:00-21:00', description: '开放时间' },
-  { key: 'CONTACT_EMAIL', value: 'library@university.edu', description: '联系邮箱' },
-  { key: 'CONTACT_PHONE', value: '123-4567-8901', description: '联系电话' },
+  { key: 'FINE_RATE_PER_DAY', value: '0.50' },
+  { key: 'MAX_BORROW_STUDENT', value: '3' },
+  { key: 'LOAN_DURATION_DAYS', value: '30' },
+  { key: 'MAX_RENEW_TIMES', value: '2' },
+  { key: 'RENEW_DURATION_DAYS', value: '15' },
+  { key: 'LIBRARY_NAME', value: '大学图书馆管理系统' },
+  { key: 'LIBRARY_HOURS', value: '周一至周五 8:00-22:00，周末 9:00-21:00' },
+  { key: 'CONTACT_EMAIL', value: 'library@university.edu' },
+  { key: 'CONTACT_PHONE', value: '123-4567-8901' },
+];
+
+// 公告数据
+const ANNOUNCEMENTS_DATA = [
+  {
+    title: '📢 图书馆开放时间调整通知',
+    content: '自2026年6月1日起，图书馆开放时间调整为：周一至周五 8:00-22:00，周末 9:00-21:00。节假日开放时间另行通知。',
+    isPinned: true,
+    publishDate: new Date(),
+    expiryDate: new Date(new Date().setMonth(new Date().getMonth() + 3)),
+  },
+  {
+    title: '📚 新书上架通知',
+    content: '本周新上架计算机科学类图书50册，文学类图书30册，欢迎借阅！',
+    isPinned: false,
+    publishDate: new Date(new Date().setDate(new Date().getDate() - 3)),
+    expiryDate: new Date(new Date().setDate(new Date().getDate() + 27)),
+  },
+  {
+    title: '🎉 世界读书日活动预告',
+    content: '4月23日世界读书日，图书馆将举办"阅读马拉松"活动，参与者可获得精美礼品，欢迎报名！',
+    isPinned: false,
+    publishDate: new Date(new Date().setDate(new Date().getDate() - 10)),
+    expiryDate: new Date(new Date().setDate(new Date().getDate() + 20)),
+  },
+  {
+    title: '⚠️ 系统维护通知',
+    content: '本周六 22:00 - 周日 02:00 进行系统升级维护，届时借还书服务可能短暂中断，敬请谅解。',
+    isPinned: false,
+    publishDate: new Date(new Date().setDate(new Date().getDate() - 1)),
+    expiryDate: new Date(new Date().setDate(new Date().getDate() + 7)),
+  },
+  {
+    title: '✨ 逾期图书归还提醒',
+    content: '请各位读者及时归还已到期图书，避免产生逾期费用。如有疑问请联系图书馆服务台。',
+    isPinned: false,
+    publishDate: new Date(new Date().setDate(new Date().getDate() - 5)),
+    expiryDate: new Date(new Date().setDate(new Date().getDate() + 25)),
+  },
 ];
 
 // 辅助函数
-function generateISBN(index) {
-  return `978-${String(index).padStart(10, '0')}`;
-}
-
 function generateBarcode(bookId, copyNumber) {
   return `BC-${String(bookId).padStart(6, '0')}-${String(copyNumber).padStart(3, '0')}`;
 }
@@ -273,6 +306,17 @@ function getRandomElement(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
 
+const areaOptions = {
+  'Technology': '科技图书区',
+  'Fiction': '文学小说区',
+  'Science': '自然科学区',
+  'History': '历史地理区',
+  'Management': '管理科学区',
+  'Science Fiction': '科幻小说区',
+};
+const shelfOptions = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+const floorOptions = [1, 2, 3, 4, 5];
+
 // 主函数
 async function main() {
   console.log('🚀 开始初始化数据库...\n');
@@ -280,10 +324,11 @@ async function main() {
   // ==================== 清空现有数据 ====================
   console.log('📦 清空现有数据...');
   
-  const deleteOperations = [
+  const deleteOrder = [
     { name: '审计日志', model: prisma.auditLog },
     { name: '公告发布者', model: prisma.announcementPublisher },
     { name: '公告', model: prisma.announcement },
+    { name: '消息', model: prisma.message },
     { name: '预约', model: prisma.hold },
     { name: '心愿单', model: prisma.wishlist },
     { name: '评分', model: prisma.rating },
@@ -291,16 +336,15 @@ async function main() {
     { name: '副本', model: prisma.copy },
     { name: '图书', model: prisma.book },
     { name: '用户', model: prisma.user },
-    { name: '馆员', model: prisma.librarian },
     { name: '配置', model: prisma.config },
   ];
 
-  for (const op of deleteOperations) {
+  for (const op of deleteOrder) {
     try {
       await op.model.deleteMany();
       console.log(`  ✓ 清空${op.name}`);
     } catch (error) {
-      // 某些表可能不存在，忽略错误
+      // 忽略不存在的表
     }
   }
 
@@ -336,24 +380,26 @@ async function main() {
       },
     });
     students.push(student);
-    console.log(`  ✓ 学生: ${student.studentId} - ${student.name} (${student.email})`);
+    console.log(`  ✓ 学生: ${student.studentId} - ${student.name}`);
   }
 
-  // 创建馆员（使用 User 表，role='LIBRARIAN'）
-const librarianPasswordHash = await bcrypt.hash(CONFIG.LIBRARIAN_PASSWORD, CONFIG.PASSWORD_HASH_ROUNDS);
+  // 创建馆员（使用 User 表，role='LIBRARIAN'，增加 employeeId）
+  const librarianPasswordHash = await bcrypt.hash(CONFIG.LIBRARIAN_PASSWORD, CONFIG.PASSWORD_HASH_ROUNDS);
+  const librarians = [];
 
-for (const librarianData of TEST_ACCOUNTS.librarians) {
-  const librarian = await prisma.user.create({
-    data: {
-      email: `${librarianData.employeeId.toLowerCase()}@library.com`, // 根据工号生成一个登录邮箱
-      name: librarianData.name,
-      employeeId: librarianData.employeeId, // 确保你的 User 模型有这个字段
-      passwordHash: librarianPasswordHash,
-      role: 'LIBRARIAN', // 角色设置为馆员
-    },
-  });
-  console.log(`  ✓ 馆员: ${librarian.employeeId} - ${librarian.name} / ${CONFIG.LIBRARIAN_PASSWORD}`);
-}
+  for (const librarianData of TEST_ACCOUNTS.librarians) {
+    const librarian = await prisma.user.create({
+      data: {
+        email: `${librarianData.employeeId.toLowerCase()}@library.com`,
+        name: librarianData.name,
+        employeeId: librarianData.employeeId,
+        passwordHash: librarianPasswordHash,
+        role: 'LIBRARIAN',
+      },
+    });
+    librarians.push(librarian);
+    console.log(`  ✓ 馆员: ${librarian.employeeId} - ${librarian.name}`);
+  }
 
   console.log('\n✅ 用户创建完成\n');
 
@@ -362,18 +408,11 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
   
   for (const config of SYSTEM_CONFIGS) {
     await prisma.config.upsert({
-      where: {
-        key: config.key,
-      },
-      update: {
-        value: config.value,
-      },
-      create: {
-        key: config.key,
-        value: config.value,
-      },
+      where: { key: config.key },
+      update: { value: config.value },
+      create: { key: config.key, value: config.value },
     });
-    console.log(`  ✓ ${config.key} = ${config.value} (${config.description})`);
+    console.log(`  ✓ ${config.key} = ${config.value}`);
   }
 
   console.log('\n✅ 系统配置创建完成\n');
@@ -381,22 +420,10 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
   // ==================== 创建图书和副本 ====================
   console.log('📚 创建图书和副本...');
   
-  const floorOptions = [1, 2, 3, 4, 5];
-  const areaOptions = {
-    'Technology': '科技图书区',
-    'Fiction': '文学小说区',
-    'Science': '自然科学区',
-    'History': '历史地理区',
-    'Management': '管理科学区',
-    'Science Fiction': '科幻小说区',
-  };
-  const shelfOptions = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-
   let bookCount = 0;
   let copyCount = 0;
 
   for (const bookData of BOOKS_DATA) {
-    // 创建图书
     const book = await prisma.book.create({
       data: {
         title: bookData.title,
@@ -408,14 +435,14 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
       },
     });
 
-    // 为每本书创建 1-5 个副本
+    // 每本书 1-5 个副本
     const numberOfCopies = getRandomInt(1, 5);
     const floor = getRandomElement(floorOptions);
     const area = areaOptions[bookData.genre] || '综合图书区';
     const shelf = getRandomElement(shelfOptions);
 
     for (let i = 0; i < numberOfCopies; i++) {
-      const status = Math.random() > 0.3 ? 'AVAILABLE' : getRandomElement(['BORROWED', 'AVAILABLE']);
+      const status = Math.random() > 0.3 ? 'AVAILABLE' : 'BORROWED';
       
       await prisma.copy.create({
         data: {
@@ -430,12 +457,10 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
       });
       copyCount++;
     }
-
     bookCount++;
   }
 
   console.log(`  ✓ 创建了 ${bookCount} 本图书，共 ${copyCount} 个副本`);
-
   console.log('\n✅ 图书创建完成\n');
 
   // ==================== 创建示例借阅记录 ====================
@@ -448,6 +473,7 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
     });
 
     const loanCount = Math.min(5, allCopies.length);
+    let actualLoanCount = 0;
     
     for (let i = 0; i < loanCount; i++) {
       const student = students[i % students.length];
@@ -462,8 +488,8 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
       const isReturned = Math.random() > 0.5;
       const returnDate = isReturned ? new Date(dueDate.getTime() + getRandomInt(-5, 10) * 24 * 60 * 60 * 1000) : null;
       
-      const fineAmount = returnDate
-        ? calculateOverdueSummary(dueDate, returnDate, DEFAULT_FINE_RATE_PER_DAY).estimatedFineAmount
+      const fineAmount = returnDate && returnDate > dueDate
+        ? Math.ceil((returnDate - dueDate) / (1000 * 60 * 60 * 24)) * 0.5
         : 0;
 
       await prisma.loan.create({
@@ -475,22 +501,23 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
           returnDate: returnDate,
           fineAmount: fineAmount,
           finePaid: fineAmount > 0 && Math.random() > 0.5,
+          renewCount: getRandomInt(0, 2),
         },
       });
 
-      // 更新副本状态
       await prisma.copy.update({
         where: { id: copy.id },
         data: { status: isReturned ? 'AVAILABLE' : 'BORROWED' },
       });
+      actualLoanCount++;
     }
     
-    console.log(`  ✓ 创建了 ${loanCount} 条借阅记录`);
+    console.log(`  ✓ 创建了 ${actualLoanCount} 条借阅记录`);
   }
 
-  console.log('\n✅ 示例数据创建完成\n');
+  console.log('\n✅ 借阅记录创建完成\n');
 
-  // ==================== 创建示例评分 ====================
+  // ==================== 创建示例评分（含 review 字段）====================
   console.log('⭐ 创建示例评分...');
   
   const allBooks = await prisma.book.findMany({ take: 10 });
@@ -507,6 +534,7 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
               bookId: book.id,
               userId: student.id,
               stars: getRandomInt(3, 5),
+              review: `这本书《${book.title}》非常精彩，强烈推荐！`,
             },
           });
           ratingCount++;
@@ -521,6 +549,115 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
 
   console.log('\n✅ 评分创建完成\n');
 
+  // ==================== 创建预约 (Hold) ====================
+  console.log('📌 创建预约记录...');
+  
+  let holdCount = 0;
+  const booksForHold = await prisma.book.findMany({ take: 8 });
+  
+  for (let i = 0; i < booksForHold.length && i < students.length * 2; i++) {
+    const book = booksForHold[i];
+    const student = students[i % students.length];
+    const statuses = ['WAITING', 'READY', 'CANCELLED'];
+    const status = statuses[getRandomInt(0, 2)];
+    const createdAt = new Date(new Date().setDate(new Date().getDate() - getRandomInt(1, 15)));
+    
+    try {
+      await prisma.hold.create({
+        data: {
+          bookId: book.id,
+          userId: student.id,
+          status: status,
+          createdAt: createdAt,
+        },
+      });
+      holdCount++;
+    } catch (error) {
+      // 忽略重复预约
+    }
+  }
+  
+  console.log(`  ✓ 创建了 ${holdCount} 条预约记录`);
+
+  console.log('\n✅ 预约创建完成\n');
+
+  // ==================== 创建心愿单 (Wishlist) ====================
+  console.log('❤️  创建心愿单记录...');
+  
+  let wishlistCount = 0;
+  const booksForWishlist = await prisma.book.findMany({ skip: 5, take: 10 });
+  
+  for (let i = 0; i < booksForWishlist.length && i < students.length * 2; i++) {
+    const book = booksForWishlist[i];
+    const student = students[i % students.length];
+    
+    try {
+      await prisma.wishlist.create({
+        data: {
+          bookId: book.id,
+          userId: student.id,
+          createdAt: new Date(new Date().setDate(new Date().getDate() - getRandomInt(1, 30))),
+        },
+      });
+      wishlistCount++;
+    } catch (error) {
+      // 忽略重复心愿单
+    }
+  }
+  
+  console.log(`  ✓ 创建了 ${wishlistCount} 条心愿单记录`);
+
+  console.log('\n✅ 心愿单创建完成\n');
+
+  // ==================== 创建公告 (Announcement) ====================
+  console.log('📢 创建公告...');
+  
+  for (const announcementData of ANNOUNCEMENTS_DATA) {
+    const announcement = await prisma.announcement.create({
+      data: {
+        title: announcementData.title,
+        content: announcementData.content,
+        isPinned: announcementData.isPinned,
+        publishDate: announcementData.publishDate,
+        expiryDate: announcementData.expiryDate,
+      },
+    });
+    
+    // 为每个公告添加发布者（管理员）
+    await prisma.announcementPublisher.create({
+      data: {
+        userId: admin.id,
+        announcementId: announcement.id,
+      },
+    });
+  }
+  
+  console.log(`  ✓ 创建了 ${ANNOUNCEMENTS_DATA.length} 条公告`);
+
+  console.log('\n✅ 公告创建完成\n');
+
+  // ==================== 创建示例消息 ====================
+  console.log('💬 创建示例消息...');
+  
+  if (students.length > 0 && librarians.length > 0) {
+    for (let i = 0; i < 3; i++) {
+      const student = students[i % students.length];
+      const librarian = librarians[i % librarians.length];
+      
+      await prisma.message.create({
+        data: {
+          senderId: student.id,
+          receiverId: librarian.id,
+          content: `请问《${allBooks[i]?.title || '图书'}》还有副本吗？我想借阅。`,
+          isRead: Math.random() > 0.5,
+        },
+      });
+    }
+    console.log('  ✓ 创建了 3 条示例消息');
+  }
+
+  console.log('\n✅ 消息创建完成\n');
+
   // ==================== 创建审计日志 ====================
   console.log('📝 创建审计日志...');
   
@@ -529,13 +666,13 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
       userId: admin.id,
       action: 'SYSTEM_INIT',
       entity: 'System',
-      detail: '系统初始化完成，种子数据已加载',
+      detail: '系统初始化完成，种子数据已加载（包含公告、预约、心愿单）',
     },
   });
   
   console.log('  ✓ 审计日志创建完成');
 
-  // ==================== 输出测试账号信息 ====================
+  // ==================== 输出统计信息 ====================
   console.log('\n' + '='.repeat(60));
   console.log('🎉 数据库初始化完成！');
   console.log('='.repeat(60));
@@ -543,40 +680,33 @@ for (const librarianData of TEST_ACCOUNTS.librarians) {
   console.log('\n📋 测试账号信息：');
   console.log('-'.repeat(40));
   
-  console.log('\n👑 管理员 (Admin):');
-  console.log(`   邮箱: ${TEST_ACCOUNTS.admin.email}`);
-  console.log(`   密码: ${TEST_ACCOUNTS.admin.password}`);
-  console.log(`   姓名: ${TEST_ACCOUNTS.admin.name}`);
+  console.log(`\n👑 管理员: ${TEST_ACCOUNTS.admin.email} / ${TEST_ACCOUNTS.admin.password}`);
   
-  console.log('\n📚 馆员 (Librarian):');
-  TEST_ACCOUNTS.librarians.forEach((lib, index) => {
-    console.log(`   ${index + 1}. 工号: ${lib.employeeId} / 密码: ${lib.password} (${lib.name})`);
+  console.log('\n📚 馆员 (使用工号登录):');
+  TEST_ACCOUNTS.librarians.forEach((lib, idx) => {
+    console.log(`   ${idx + 1}. 工号: ${lib.employeeId} / 密码: ${lib.password} (${lib.name})`);
   });
   
-  console.log('\n🎓 学生 (Student):');
-  TEST_ACCOUNTS.students.slice(0, 3).forEach((student, index) => {
-    console.log(`   ${index + 1}. 学号: ${student.studentId} / 密码: ${student.password} (${student.name})`);
-    console.log(`      邮箱: ${student.email}`);
+  console.log('\n🎓 学生 (使用邮箱登录):');
+  TEST_ACCOUNTS.students.slice(0, 3).forEach((student, idx) => {
+    console.log(`   ${idx + 1}. 学号: ${student.studentId} / 密码: ${student.password} (${student.name})`);
   });
-  if (TEST_ACCOUNTS.students.length > 3) {
-    console.log(`   ... 还有 ${TEST_ACCOUNTS.students.length - 3} 个学生账号`);
-  }
   
-  console.log('\n📖 统计数据：');
-  console.log(`   图书总数: ${bookCount}`);
-  console.log(`   副本总数: ${copyCount}`);
-  console.log(`   学生总数: ${students.length}`);
-  console.log(`   馆员总数: ${TEST_ACCOUNTS.librarians.length}`);
-  
-  console.log('\n💡 提示：');
-  console.log('   1. 馆员登录请使用统一登录接口，选择 "librarian" 类型');
-  console.log('   2. 学生和管理员登录使用邮箱');
-  console.log('   3. 馆员登录使用工号');
+  console.log('\n📊 统计：');
+  console.log(`   图书: ${bookCount} 本`);
+  console.log(`   副本: ${copyCount} 个`);
+  console.log(`   借阅: ${actualLoanCount || 0} 条`);
+  console.log(`   评分: ${ratingCount} 条`);
+  console.log(`   预约: ${holdCount} 条`);
+  console.log(`   心愿单: ${wishlistCount} 条`);
+  console.log(`   公告: ${ANNOUNCEMENTS_DATA.length} 条`);
+  console.log(`   消息: 3 条`);
+  console.log(`   用户: 1 管理员 + ${TEST_ACCOUNTS.librarians.length} 馆员 + ${students.length} 学生`);
   
   console.log('\n' + '='.repeat(60) + '\n');
 }
 
-// 执行主函数
+// 执行
 main()
   .catch((e) => {
     console.error('\n❌ 种子数据初始化失败:');

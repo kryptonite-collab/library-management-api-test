@@ -1,7 +1,7 @@
 const express = require('express');
 
 const prisma = require('../lib/prisma');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireLibrarian } = require('../middleware/auth');
 
 const router = express.Router();
 const LOOKUP_TIMEOUT_MS = 7000;
@@ -16,8 +16,6 @@ const BOOK_SELECT = {
   language: true,
   createdAt: true,
   updatedAt: true,
-  totalCopies: true,      // ✅ 添加
-  availableCopies: true,  // ✅ 添加
 };
 
 function normalizeText(value) {
@@ -436,17 +434,6 @@ async function lookupBookByIsbn(isbn) {
   return null;
 }
 
-// ==================== 权限检查中间件 ====================
-function checkLibrarianOrAdmin(req, res, next) {
-  if (!req.user) {
-    return res.status(401).json({ error: '未认证' });
-  }
-  if (req.user.role !== 'LIBRARIAN' && req.user.role !== 'ADMIN') {
-    return res.status(403).json({ error: '权限不足，需要馆员或管理员权限' });
-  }
-  next();
-}
-
 // ==================== 公开接口（无需认证） ====================
 
 // 获取所有图书
@@ -550,7 +537,7 @@ router.get('/search', async (req, res) => {
   }
 });
 
-// 通过 ISBN 联网获取图书信息，供馆员添加/编辑图书时自动填表
+// 通过 ISBN 联网获取图书信息
 router.get('/lookup', async (req, res) => {
   const isbn = normalizeIsbn(req.query.isbn);
 
@@ -567,7 +554,7 @@ router.get('/lookup', async (req, res) => {
     if (!book) {
       return res.status(404).json({
         success: false,
-        error: 'No online book information found for this ISBN. Please check your network or fill the book fields manually.',
+        error: 'No online book information found for this ISBN.',
       });
     }
 
@@ -629,7 +616,7 @@ router.get('/:id', async (req, res) => {
 // ==================== 馆员/管理员接口（需要认证） ====================
 
 // 添加图书
-router.post('/', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
+router.post('/', requireAuth, requireLibrarian, async (req, res) => {
   try {
     const { 
       title, author, isbn, genre, description, language,
@@ -646,13 +633,11 @@ router.post('/', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
       return res.status(400).json({ error: '请输入有效的 ISBN-10 或 ISBN-13' });
     }
 
-    // 检查 ISBN 是否已存在
     const existingBook = await prisma.book.findUnique({ where: { isbn: normalizedIsbn } });
     if (existingBook) {
       return res.status(409).json({ error: '该 ISBN 已存在' });
     }
 
-    // 创建图书
     const book = await prisma.book.create({
       data: {
         title: title.trim(),
@@ -665,7 +650,6 @@ router.post('/', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
       select: BOOK_SELECT,
     });
 
-    // 创建默认副本（使用前端传来的位置信息）
     await prisma.copy.create({
       data: {
         bookId: book.id,
@@ -678,10 +662,9 @@ router.post('/', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
       }
     });
 
-    // 记录审计日志
     await prisma.auditLog.create({
       data: {
-        userId: req.user.role === 'ADMIN' ? req.user.id : null,
+        userId: req.user.id,
         action: 'CREATE_BOOK',
         entity: 'Book',
         entityId: book.id,
@@ -689,7 +672,6 @@ router.post('/', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
       }
     });
 
-    // 返回完整的图书信息（包含副本）
     const fullBook = await prisma.book.findUnique({
       where: { id: book.id },
       include: {
@@ -722,13 +704,13 @@ router.post('/', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
 });
 
 // 更新图书信息
-router.put('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
+router.put('/:id', requireAuth, requireLibrarian, async (req, res) => {
   try {
     const bookId = Number(req.params.id);
     const { 
       title, author, isbn, genre, description, language,
       floor, libraryArea, shelfNo, shelfLevel,
-      totalCopies  // 只接收 totalCopies，不接收 availableCopies
+      totalCopies
     } = req.body;
 
     if (Number.isNaN(bookId)) {
@@ -757,7 +739,6 @@ router.put('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
       }
     }
 
-    // 1. 更新图书基本信息
     await prisma.book.update({
       where: { id: bookId },
       data: {
@@ -770,14 +751,12 @@ router.put('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
       }
     });
 
-    // 2. 处理副本数量变化
     if (totalCopies !== undefined) {
       const currentCopies = await prisma.copy.findMany({ where: { bookId: bookId } });
       const currentCount = currentCopies.length;
       const targetCount = Number(totalCopies);
       
       if (targetCount > currentCount) {
-        // 需要增加副本
         const firstCopy = currentCopies[0] || {
           floor: floor || 1,
           libraryArea: libraryArea || '',
@@ -799,14 +778,12 @@ router.put('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
           });
         }
       } else if (targetCount < currentCount) {
-        // 需要减少副本：只删除 AVAILABLE 且没有被借阅的副本
         const toDeleteCount = currentCount - targetCount;
         let deletedCount = 0;
         
         for (const copy of currentCopies) {
           if (deletedCount >= toDeleteCount) break;
           
-          // 检查是否可以删除
           if (copy.status === 'AVAILABLE') {
             const activeLoan = await prisma.loan.findFirst({
               where: { copyId: copy.id, returnDate: null }
@@ -819,16 +796,14 @@ router.put('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
           }
         }
         
-        // 如果可删除的副本不够，返回错误
         if (deletedCount < toDeleteCount) {
           return res.status(400).json({ 
-            error: `无法减少副本数量，只有 ${deletedCount} 个副本可以删除（未被借阅的可用副本）` 
+            error: `无法减少副本数量，只有 ${deletedCount} 个副本可以删除` 
           });
         }
       }
     }
 
-    // 3. 更新所有副本的位置信息
     if (floor !== undefined || libraryArea !== undefined || shelfNo !== undefined || shelfLevel !== undefined) {
       const allCopies = await prisma.copy.findMany({ where: { bookId: bookId } });
       for (const copy of allCopies) {
@@ -844,10 +819,9 @@ router.put('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
       }
     }
 
-    // 4. 记录审计日志
     await prisma.auditLog.create({
       data: {
-        userId: req.user.role === 'ADMIN' ? req.user.id : null,
+        userId: req.user.id,
         action: 'UPDATE_BOOK',
         entity: 'Book',
         entityId: bookId,
@@ -855,7 +829,6 @@ router.put('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
       }
     });
 
-    // 5. 返回完整信息
     const fullBook = await prisma.book.findUnique({
       where: { id: bookId },
       include: {
@@ -887,9 +860,8 @@ router.put('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
   }
 });
 
-
 // 删除图书
-router.delete('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
+router.delete('/:id', requireAuth, requireLibrarian, async (req, res) => {
   const bookId = Number(req.params.id);
   if (isNaN(bookId)) {
     return res.status(400).json({ error: '无效的图书ID' });
@@ -911,7 +883,6 @@ router.delete('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
       return res.status(404).json({ error: '图书不存在' });
     }
 
-    // 检查是否有未归还的借阅
     const hasActiveLoans = book.copies.some(copy => copy.loans.length > 0);
     if (hasActiveLoans) {
       return res.status(400).json({ error: '该图书有未归还的借阅记录，无法删除' });
@@ -921,7 +892,7 @@ router.delete('/:id', requireAuth, checkLibrarianOrAdmin, async (req, res) => {
 
     await prisma.auditLog.create({
       data: {
-        userId: req.user.role === 'ADMIN' ? req.user.id : null,
+        userId: req.user.id,
         action: 'DELETE_BOOK',
         entity: 'Book',
         entityId: bookId,

@@ -496,10 +496,14 @@ async function main() {
         ? Math.ceil((returnDate - dueDate) / (1000 * 60 * 60 * 24)) * 0.5
         : 0;
 
+      // 生成借阅条形码
+      const loanBarcode = `LN-${String(copy.id).padStart(6, '0')}-${String(Date.now()).slice(-3)}`;
+      
       await prisma.loan.create({
         data: {
           copyId: copy.id,
           userId: student.id,
+          barcode: loanBarcode,
           checkoutDate: checkoutDate,
           dueDate: dueDate,
           returnDate: returnDate,

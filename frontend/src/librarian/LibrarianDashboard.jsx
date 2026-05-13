@@ -108,7 +108,7 @@ useEffect(() => {
             onClick={() => setActiveTab('home')}
             className="mb-4 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition flex items-center gap-2"
           >
-            <span>←</span> 返回仪表盘
+            <span>←</span> 返回
           </button>
           <LibrarianBorrow />
         </div>

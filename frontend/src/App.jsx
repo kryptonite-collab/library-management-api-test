@@ -13,6 +13,7 @@ import AdminAnnouncements from './pages/AdminAnnouncements';
 import UserManagement from './pages/UserManagement';
 import Messages from './pages/Messages';
 import SystemConfig from './pages/SystemConfig';
+import AdminBackupPage from './pages/AdminBackupPage';
 import AdminBlocklist from './pages/AdminBlocklist';
 
 
@@ -20,6 +21,7 @@ function App() {
   const navigate = useNavigate();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('search');
 
   useEffect(() => {
     const token = localStorage.getItem('token') || localStorage.getItem('librarianToken');
@@ -39,6 +41,7 @@ function App() {
     localStorage.removeItem('librarianToken');
     localStorage.removeItem('librarianInfo');
     setIsLoggedIn(false);
+    setActiveTab('search');
     navigate('/login');
   };
 
@@ -65,6 +68,7 @@ function App() {
         )
       } />
       <Route path="/admin/config" element={<SystemConfig />} />
+      <Route path="/admin/backups" element={<AdminBackupPage />} />
       <Route path="/admin/blocklist" element={<AdminBlocklist />} />
     </Routes>
   );

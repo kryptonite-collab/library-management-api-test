@@ -1,6 +1,8 @@
+import json as json_lib
 from urllib.parse import urljoin
 from typing import Optional
 
+import allure
 import requests
 
 from common.config import BASE_URL, REQUEST_TIMEOUT
@@ -25,18 +27,23 @@ class RequestClient:
         timeout: Optional[float] = None,
     ) -> dict:
         request_headers = {**self.default_headers, **(headers or {})}
+        request_url = self._build_url(path)
+        self._attach_request(method, request_url, request_headers, params, json)
+
         response = requests.request(
             method=method,
-            url=self._build_url(path),
+            url=request_url,
             headers=request_headers,
             params=params,
             json=json,
             timeout=timeout or self.timeout,
         )
+        response_body = self._parse_body(response)
+        self._attach_response(response.status_code, response_body, response.text)
 
         return {
             "status_code": response.status_code,
-            "body": self._parse_body(response),
+            "body": response_body,
             "text": response.text,
             "headers": dict(response.headers),
         }
@@ -113,3 +120,56 @@ class RequestClient:
             return response.json()
         except ValueError:
             return None
+
+    def _attach_request(
+        self,
+        method: str,
+        url: str,
+        headers: dict,
+        params: Optional[dict],
+        body: Optional[dict],
+    ) -> None:
+        allure.attach(
+            self._format_json(
+                {
+                    "method": method.upper(),
+                    "url": url,
+                    "headers": self._mask_sensitive_headers(headers),
+                    "params": params or {},
+                    "json": body,
+                }
+            ),
+            name="HTTP Request",
+            attachment_type=allure.attachment_type.JSON,
+        )
+
+    def _attach_response(
+        self,
+        status_code: int,
+        body,
+        text: str,
+    ) -> None:
+        allure.attach(
+            self._format_json(
+                {
+                    "status_code": status_code,
+                    "body": body if body is not None else text,
+                }
+            ),
+            name="HTTP Response",
+            attachment_type=allure.attachment_type.JSON,
+        )
+
+    @staticmethod
+    def _mask_sensitive_headers(headers: dict) -> dict:
+        safe_headers = dict(headers)
+
+        for key in list(safe_headers.keys()):
+            if key.lower() == "authorization":
+                safe_headers[key] = "Bearer ***"
+
+        return safe_headers
+
+    @staticmethod
+    def _format_json(data) -> str:
+        return json_lib.dumps(data, ensure_ascii=False, indent=2, default=str)

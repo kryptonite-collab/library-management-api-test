@@ -34,6 +34,7 @@ Default configuration:
 ```env
 BASE_URL=http://localhost:3001
 REQUEST_TIMEOUT=10
+SQLITE_DB_PATH=../backend/prisma/prisma/dev.db
 ```
 
 ## Start Backend
@@ -77,18 +78,86 @@ Run book contract tests:
 pytest -m "books and contract"
 ```
 
+Run database consistency tests:
+
+```bash
+pytest -m "db and consistency"
+```
+
+Run flow tests:
+
+```bash
+pytest -m flow
+```
+
+Run with the helper script:
+
+```bash
+.\scripts\run_tests.ps1 -Suite smoke
+.\scripts\run_tests.ps1 -Suite logs
+.\scripts\run_tests.ps1 -Suite books
+.\scripts\run_tests.ps1 -Suite db
+.\scripts\run_tests.ps1 -Suite flow
+.\scripts\run_tests.ps1 -Suite all
+```
+
 ## Test Scope
 
 - `smoke`: verifies backend service availability through `GET /health`.
 - `logs`: verifies system log list, pagination, filtering, and invalid parameter handling through `GET /api/logs`.
 - `books`: verifies book list and detail contracts through `GET /books` and `GET /books/:id`.
+- `db` and `consistency`: compares API responses with local SQLite `Book` and `AuditLog` records.
+- `flow`: covers data factory readiness and future write-flow scenarios.
 
-## Generate Allure Report
+## Database Consistency Tests
+
+Database consistency tests read the local SQLite database directly with Python `sqlite3`.
+
+Configure the database path in `.env` when your local path differs:
+
+```env
+SQLITE_DB_PATH=../backend/prisma/prisma/dev.db
+```
+
+Run only consistency tests:
+
+```bash
+pytest -m "db and consistency"
+```
+
+If the SQLite file does not exist, related tests are skipped instead of failed.
+
+## Test Data Construction and Cleanup
+
+`common/data_factory.py` provides reusable builders for automated test data:
+
+- Random test ISBN values.
+- Unique test book titles.
+- Full test book payloads.
+
+Generated test data uses the `TEST_AUTO_` prefix for `title` and `isbn`.
+
+The current backend only exposes read-only book APIs:
+
+- `GET /books`
+- `GET /books/:id`
+
+Because there is no available create-book API in the current backend, this stage does not create or delete real book records through HTTP. The project currently covers read-only API contracts and database consistency checks.
+
+For future write-flow tests, cleanup must only remove records whose `title` or `isbn` starts with `TEST_AUTO_`. `DbClient.delete_test_books_by_prefix()` enforces this guard to avoid deleting real data.
+
+## 如何生成测试报告
 
 Collect Allure results:
 
 ```bash
 pytest --alluredir=allure-results
+```
+
+Or run all tests and collect results with the helper script:
+
+```bash
+.\scripts\run_tests.ps1 -Suite all
 ```
 
 Generate and open the report:
@@ -97,3 +166,12 @@ Generate and open the report:
 allure generate allure-results -o allure-report --clean
 allure open allure-report
 ```
+
+## 测试报告包含哪些信息
+
+Allure report includes:
+
+- Test module grouping by `feature`, `story`, and `title`.
+- Request attachment: method, URL, masked headers, query params, and JSON body.
+- Response attachment: status code and response body.
+- Test markers for quick filtering, including `smoke`, `logs`, `books`, `db`, `consistency`, `flow`, `contract`, `regression`, and `negative`.

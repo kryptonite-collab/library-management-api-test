@@ -12,6 +12,7 @@ router.get('/', async (req, res) => {
         id: true,
         title: true,
         author: true,
+        isbn: true,
         available: true,
         shelfLocation: true,
       },

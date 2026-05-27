@@ -23,6 +23,7 @@ app.get('/health', (req, res) => {
 // 挂载你的图书功能（保证能跑）
 app.use('/books', booksRouter);
 app.use('/logs', logsRouter);
+app.use('/api/logs', logsRouter);
 
 // 队友的优雅关闭代码（保留）
 async function shutdown(signal) {

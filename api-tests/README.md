@@ -71,6 +71,18 @@ Run log contract tests:
 pytest -m "logs and contract"
 ```
 
+Run book contract tests:
+
+```bash
+pytest -m "books and contract"
+```
+
+## Test Scope
+
+- `smoke`: verifies backend service availability through `GET /health`.
+- `logs`: verifies system log list, pagination, filtering, and invalid parameter handling through `GET /api/logs`.
+- `books`: verifies book list and detail contracts through `GET /books` and `GET /books/:id`.
+
 ## Generate Allure Report
 
 Collect Allure results:

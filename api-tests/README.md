@@ -127,6 +127,8 @@ pytest -m "db and consistency"
 
 If the SQLite file does not exist, related tests are skipped instead of failed.
 
+The audit log consistency test now creates its own `TEST_AUTO_` audit log before calling `GET /api/logs`, compares the API response with the SQLite `AuditLog` row, and cleans the test log after the assertion. It no longer depends on pre-existing audit log data.
+
 ## Test Data Construction and Cleanup
 
 `common/data_factory.py` provides reusable builders for automated test data:
@@ -134,8 +136,9 @@ If the SQLite file does not exist, related tests are skipped instead of failed.
 - Random test ISBN values.
 - Unique test book titles.
 - Full test book payloads.
+- TEST_AUTO_ audit log records for consistency tests.
 
-Generated test data uses the `TEST_AUTO_` prefix for `title` and `isbn`.
+Generated test data uses the `TEST_AUTO_` prefix for book `title`, book `isbn`, and audit log `detail`.
 
 The current backend only exposes read-only book APIs:
 
@@ -145,6 +148,8 @@ The current backend only exposes read-only book APIs:
 Because there is no available create-book API in the current backend, this stage does not create or delete real book records through HTTP. The project currently covers read-only API contracts and database consistency checks.
 
 For future write-flow tests, cleanup must only remove records whose `title` or `isbn` starts with `TEST_AUTO_`. `DbClient.delete_test_books_by_prefix()` enforces this guard to avoid deleting real data.
+
+Audit log cleanup only removes records whose `detail` starts with `TEST_AUTO_`. `DbClient.delete_test_audit_logs_by_prefix()` enforces the same guard for audit log test data.
 
 ## 如何生成测试报告
 

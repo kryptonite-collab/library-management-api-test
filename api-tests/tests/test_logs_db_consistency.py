@@ -2,6 +2,7 @@ import allure
 import pytest
 
 from common.assertions import assert_status_code
+from common.data_factory import generate_test_audit_log_data
 from common.db_client import DbClient
 from common.request_client import RequestClient
 
@@ -21,19 +22,28 @@ def test_logs_response_matches_database_record():
     client = RequestClient()
     db = DbClient()
 
-    response = client.get("/api/logs")
+    db.delete_test_audit_logs_by_prefix()
+    test_log_data = generate_test_audit_log_data()
+    inserted_log = db.insert_test_audit_log(test_log_data)
 
-    assert_status_code(response, 200)
-    items = response["body"].get("items", [])
+    try:
+        response = client.get("/api/logs", params={"action": inserted_log["action"]})
 
-    if not items:
-        pytest.skip("No audit logs exist in the current database.")
+        assert_status_code(response, 200)
+        items = response["body"].get("items", [])
+        api_log = next(
+            (item for item in items if item.get("detail") == inserted_log["detail"]),
+            None,
+        )
 
-    api_log = items[0]
-    db_log = db.get_audit_log_by_id(api_log["id"])
+        assert api_log is not None, "Inserted TEST_AUTO_ audit log should be returned by API"
 
-    assert db_log is not None, f"AuditLog id={api_log['id']} should exist in database"
-    assert api_log["action"] == db_log["action"]
-    assert api_log["entity"] == db_log["entity"]
-    assert api_log["entityId"] == db_log["entityId"]
-    assert api_log["detail"] == db_log["detail"]
+        db_log = db.get_audit_log_by_id(api_log["id"])
+
+        assert db_log is not None, f"AuditLog id={api_log['id']} should exist in database"
+        assert api_log["action"] == db_log["action"]
+        assert api_log["entity"] == db_log["entity"]
+        assert api_log["entityId"] == db_log["entityId"]
+        assert api_log["detail"] == db_log["detail"]
+    finally:
+        db.delete_test_audit_logs_by_prefix()

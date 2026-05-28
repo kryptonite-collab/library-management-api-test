@@ -29,3 +29,14 @@ def generate_test_book_payload() -> dict:
         "totalCopies": 1,
         "availableCopies": 1,
     }
+
+
+def generate_test_audit_log_data() -> dict:
+    suffix = uuid.uuid4().hex[:8]
+
+    return {
+        "action": "TEST_AUTO_AUDIT_LOG",
+        "entity": "AuditLog",
+        "entityId": None,
+        "detail": f"{TEST_DATA_PREFIX}audit_log_for_consistency_test_{suffix}",
+    }

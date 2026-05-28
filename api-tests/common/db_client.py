@@ -61,6 +61,50 @@ class DbClient:
             (log_id,),
         )
 
+    def insert_test_audit_log(self, audit_log_data: dict) -> dict:
+        self.ensure_available()
+
+        detail = audit_log_data.get("detail", "")
+        if not detail.startswith("TEST_AUTO_"):
+            raise ValueError("Only TEST_AUTO_ prefixed audit logs can be inserted by tests.")
+
+        with sqlite3.connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO AuditLog (userId, action, entity, entityId, detail)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    audit_log_data.get("userId"),
+                    audit_log_data["action"],
+                    audit_log_data["entity"],
+                    audit_log_data.get("entityId"),
+                    detail,
+                ),
+            )
+            connection.commit()
+            log_id = cursor.lastrowid
+
+        return self.get_audit_log_by_id(log_id)
+
+    def delete_test_audit_logs_by_prefix(self, prefix: str = "TEST_AUTO_") -> int:
+        self.ensure_available()
+
+        if not prefix or not prefix.startswith("TEST_AUTO_"):
+            raise ValueError("Only TEST_AUTO_ prefixed audit logs can be cleaned up.")
+
+        with sqlite3.connect(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                DELETE FROM AuditLog
+                WHERE detail LIKE ?
+                """,
+                (f"{prefix}%",),
+            )
+            connection.commit()
+
+        return cursor.rowcount
+
     def get_audit_log_by_action_entity_entity_id(
         self,
         action: str,

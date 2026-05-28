@@ -145,10 +145,12 @@ SQLITE_DB_PATH=../backend/prisma/prisma/dev.db
 - 根据 id 查询 `AuditLog`。
 - 根据 action/entity/entityId 查询 `AuditLog`。
 - 查询最近一条 `AuditLog`。
+- 插入 `detail` 带 `TEST_AUTO_` 前缀的测试审计日志。
+- 清理 `detail` 以 `TEST_AUTO_` 开头的测试审计日志。
 
 一致性测试示例：
 
-- `GET /api/logs` 返回的日志，与数据库 `AuditLog` 记录比对 `action/entity/entityId/detail`。
+- 日志一致性测试会先插入一条 `TEST_AUTO_` 审计日志，再调用 `GET /api/logs` 找回该日志，并与数据库 `AuditLog` 记录比对 `action/entity/entityId/detail`。
 - `GET /books` 返回的图书，与数据库 `Book` 记录比对 `title/author/isbn`。
 
 如果数据库文件不存在，相关测试会使用 `pytest.skip` 跳过。
@@ -160,15 +162,19 @@ SQLITE_DB_PATH=../backend/prisma/prisma/dev.db
 - 生成随机 ISBN。
 - 生成唯一 title。
 - 生成测试图书 payload。
+- 生成 `TEST_AUTO_` 审计日志测试数据。
 
 测试数据统一使用 `TEST_AUTO_` 前缀，例如：
 
 ```text
 TEST_AUTO_Book_...
 TEST_AUTO_ISBN_...
+TEST_AUTO_audit_log_for_consistency_test_...
 ```
 
 `DbClient.delete_test_books_by_prefix()` 只允许清理 `TEST_AUTO_` 前缀数据，避免误删真实数据。
+
+`DbClient.delete_test_audit_logs_by_prefix()` 只允许清理 `detail` 以 `TEST_AUTO_` 开头的审计日志，避免误删真实审计数据。
 
 当前后端没有图书创建接口，因此创建图书完整流程测试目前为 skip，不夸大为已实现的写接口自动化。
 
@@ -179,7 +185,7 @@ TEST_AUTO_ISBN_...
 | health | `GET /health` 服务可用性检查 | 已实现 |
 | logs | `GET /api/logs` 契约、分页、筛选、参数校验 | 已实现 |
 | books | `GET /books`、`GET /books/:id` 契约和异常 id | 已实现 |
-| db consistency | 接口响应与 SQLite 中 `Book`、`AuditLog` 记录一致性 | 已实现，依赖本地数据 |
+| db consistency | 接口响应与 SQLite 中 `Book`、`AuditLog` 记录一致性；日志测试会构造并清理 `TEST_AUTO_` 审计日志 | 已实现，依赖本地数据库文件 |
 | flow | 测试数据工厂；创建图书流程因无写接口跳过 | 部分实现，创建流 skip |
 
 ## 当前本地验证结果
@@ -190,18 +196,19 @@ TEST_AUTO_ISBN_...
 pytest -v
 ```
 
-结果：
+阶段 9 后，在本地 SQLite 数据库存在且后端正常启动的情况下，最新预期结果：
 
 ```text
 16 items collected
-14 passed
-2 skipped
+15 passed
+1 skipped
 ```
 
 skipped 原因：
 
-- 当前数据库无 audit log，日志数据库一致性用例跳过。
 - 当前后端无图书创建接口，创建图书流程用例跳过。
+
+阶段 9 已补充 `TEST_AUTO_` 审计日志构造与清理后，日志数据库一致性测试不再依赖已有 audit log。若 SQLite 数据库文件不存在，数据库一致性相关用例仍会按设计 skip。
 
 ## 已发现并改进的问题
 
@@ -257,6 +264,39 @@ pytest --alluredir=allure-results
 allure generate allure-results -o allure-report --clean
 allure open allure-report
 ```
+
+## GitHub Actions CI
+
+项目新增了 `.github/workflows/api-tests.yml`，用于在 `push` 和 `pull_request` 时自动执行接口自动化回归。
+
+CI 环境：
+
+| 环境 | 版本 |
+| --- | --- |
+| Node.js | 20 |
+| Python | 3.11 |
+
+CI 主要步骤：
+
+- Checkout 代码。
+- 安装 backend 依赖。
+- 执行 `npx prisma generate`。
+- 使用 Prisma migrations 创建一次性的 SQLite 数据库。
+- 执行 `npx prisma db seed` 初始化测试数据。
+- 启动 `backend/src/index.js`。
+- 等待 `http://localhost:3001/health` 可访问。
+- 安装 `api-tests/requirements.txt`。
+- 执行 `pytest -v --alluredir=allure-results`。
+- 上传 `allure-results` artifact。
+
+CI 数据库说明：
+
+- CI 不依赖提交本地 `dev.db`。
+- CI 会删除并重新创建 `backend/prisma/prisma/dev.db`。
+- CI 稳定性依赖 Prisma migrations 和 seed 脚本可用。
+- 如果后续 schema、migration、seed 不一致，数据库初始化步骤会失败，需要先修复迁移或种子数据。
+
+Allure HTML 报告没有在 CI 中直接生成并提交；CI 只上传 `allure-results` artifact，避免提交 `allure-results/` 或 `allure-report/` 产物目录。
 
 ## 简历项目描述
 

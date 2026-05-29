@@ -149,3 +149,11 @@ allure-report/
 # SQLite database files
 *.db
 backend/prisma/prisma/dev.db
+
+generate-token.js
+
+**/Login.jsx
+
+# Database backups
+backend/backups/
+.claude/

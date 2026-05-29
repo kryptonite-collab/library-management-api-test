@@ -23,15 +23,25 @@ class DbClient:
             pytest.skip(f"SQLite database file does not exist: {self.db_path}")
 
     def get_book_by_isbn(self, isbn: str) -> Optional[dict]:
-        return self._query_one(
+        book = self._query_one(
             """
             SELECT id, title, author, isbn, genre, description, language,
-                   shelfLocation, available, createdAt
+                   createdAt
             FROM Book
             WHERE isbn = ?
             """,
             (isbn,),
         )
+
+        if book is None:
+            return None
+
+        return {
+            **book,
+            "shelfLocation": None,
+            "available": None,
+            "updatedAt": None,
+        }
 
     def delete_test_books_by_prefix(self, prefix: str = "TEST_AUTO_") -> int:
         self.ensure_available()

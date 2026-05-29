@@ -38,6 +38,7 @@ function buildWhereClause(query) {
   return { where };
 }
 
+// 获取系统日志列表 - 暂时去掉认证
 router.get('/', async (req, res, next) => {
   try {
     const pagination = parsePaginationQuery(req.query);

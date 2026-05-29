@@ -43,13 +43,7 @@ pytest -v
 
 ```powershell
 cd backend
-```
-
-```powershell
 npm install
-```
-
-```powershell
 npm run dev
 ```
 
@@ -57,21 +51,9 @@ npm run dev
 
 ```powershell
 cd api-tests
-```
-
-```powershell
 python -m venv .venv
-```
-
-```powershell
 .\.venv\Scripts\Activate.ps1
-```
-
-```powershell
 pip install -r requirements.txt
-```
-
-```powershell
 pytest -v
 ```
 

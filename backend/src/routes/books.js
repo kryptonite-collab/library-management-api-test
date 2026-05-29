@@ -15,7 +15,6 @@ const BOOK_SELECT = {
   description: true,
   language: true,
   createdAt: true,
-  updatedAt: true,
 };
 
 function normalizeText(value) {
@@ -458,45 +457,30 @@ router.get('/', async (req, res) => {
   try {
     const books = await prisma.book.findMany({
       orderBy: { id: 'asc' },
-      include: {
-        copies: {
-          select: {
-            id: true,
-            barcode: true,
-            status: true,
-            floor: true,
-            libraryArea: true,
-            shelfNo: true,
-            shelfLevel: true,
-          }
-        }
-      }
+      select: {
+        id: true,
+        title: true,
+        author: true,
+        isbn: true,
+        genre: true,
+        description: true,
+        language: true,
+        createdAt: true,
+      },
     });
 
-    const booksWithCount = books.map(book => {
-      const availableCopies = book.copies.filter(c => c.status === 'AVAILABLE').length;
-      const firstCopy = book.copies[0] || {};
-      return {
-        id: book.id,
-        title: book.title,
-        author: book.author,
-        isbn: book.isbn,
-        genre: book.genre,
-        description: book.description,
-        language: book.language,
-        createdAt: book.createdAt,
-        updatedAt: book.updatedAt,
-        availableCopies: availableCopies,
-        totalCopies: book.copies.length,
-        floor: firstCopy.floor || 1,
-        libraryArea: firstCopy.libraryArea || '',
-        shelfNo: firstCopy.shelfNo || 'A',
-        shelfLevel: firstCopy.shelfLevel || 1,
-        copies: book.copies
-      };
-    });
+    const booksWithDefaults = books.map(book => ({
+      ...book,
+      updatedAt: null,
+      availableCopies: 0,
+      totalCopies: 0,
+      floor: null,
+      libraryArea: '',
+      shelfNo: '',
+      shelfLevel: null,
+    }));
 
-    res.json({ data: booksWithCount });
+    res.json({ data: booksWithDefaults });
   } catch (error) {
     console.error('Failed to fetch books:', error);
     res.status(500).json({ error: 'Failed to fetch books', detail: error.message });
@@ -624,29 +608,37 @@ router.get('/:id', async (req, res) => {
   try {
     const book = await prisma.book.findUnique({
       where: { id: bookId },
-      include: {
-        copies: {
-          select: { id: true, barcode: true, floor: true, libraryArea: true, shelfNo: true, shelfLevel: true, status: true }
-        },
-        ratings: {
-          include: { user: { select: { id: true, name: true } } }
-        }
-      }
+      select: {
+        id: true,
+        title: true,
+        author: true,
+        isbn: true,
+        genre: true,
+        description: true,
+        language: true,
+        createdAt: true,
+      },
     });
 
     if (!book) {
       return res.status(404).json({ error: 'Book not found' });
     }
 
-    const availableCopies = book.copies.filter(c => c.status === 'AVAILABLE').length;
+    const bookWithDefaults = {
+      ...book,
+      updatedAt: null,
+      availableCopies: 0,
+      totalCopies: 0,
+      floor: null,
+      libraryArea: '',
+      shelfNo: '',
+      shelfLevel: null,
+    };
 
     res.json({
+      ...bookWithDefaults,
       success: true,
-      data: {
-        ...book,
-        availableCopies: availableCopies,
-        totalCopies: book.copies.length,
-      }
+      data: bookWithDefaults,
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch book detail', detail: error.message });

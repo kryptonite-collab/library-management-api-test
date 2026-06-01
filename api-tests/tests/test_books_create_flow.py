@@ -25,7 +25,7 @@ def test_generate_test_book_payload():
 
 @allure.feature("Books")
 @allure.story("Create book flow")
-@allure.title("Create book flow is skipped until write API is available")
+@allure.title("Create book flow is skipped until authenticated write-flow automation is added")
 def test_create_book_flow_requires_write_api():
     payload = generate_test_book_payload()
     assert payload["title"].startswith(TEST_DATA_PREFIX)

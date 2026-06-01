@@ -32,6 +32,6 @@ def test_create_book_flow_requires_write_api():
     assert payload["isbn"].startswith(TEST_DATA_PREFIX)
 
     pytest.skip(
-        "Current backend only exposes read-only book APIs: GET /books and GET /books/:id. "
-        "Create/detail/database/cleanup flow can be enabled after a POST /books API exists."
+        "后端已提供带馆员鉴权的图书写接口；当前自动化尚未接入馆员登录、创建、详情校验、"
+        "数据库校验和清理闭环，因此该流程暂时 skip。"
     )

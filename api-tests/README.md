@@ -140,12 +140,12 @@ The audit log consistency test now creates its own `TEST_AUTO_` audit log before
 
 Generated test data uses the `TEST_AUTO_` prefix for book `title`, book `isbn`, and audit log `detail`.
 
-The current backend only exposes read-only book APIs:
+后端已提供带馆员鉴权的图书写接口；当前自动化尚未接入馆员登录、创建、详情校验、数据库校验和清理闭环，因此该流程暂时 skip。
 
 - `GET /books`
 - `GET /books/:id`
 
-Because there is no available create-book API in the current backend, this stage does not create or delete real book records through HTTP. The project currently covers read-only API contracts and database consistency checks.
+The automated flow does not create or delete real book records through HTTP yet. The existing coverage includes API contracts and database consistency checks.
 
 For future write-flow tests, cleanup must only remove records whose `title` or `isbn` starts with `TEST_AUTO_`. `DbClient.delete_test_books_by_prefix()` enforces this guard to avoid deleting real data.
 

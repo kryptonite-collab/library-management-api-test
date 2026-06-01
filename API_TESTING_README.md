@@ -176,7 +176,7 @@ TEST_AUTO_audit_log_for_consistency_test_...
 
 `DbClient.delete_test_audit_logs_by_prefix()` 只允许清理 `detail` 以 `TEST_AUTO_` 开头的审计日志，避免误删真实审计数据。
 
-当前后端没有图书创建接口，因此创建图书完整流程测试目前为 skip，不夸大为已实现的写接口自动化。
+后端已提供带馆员鉴权的图书写接口；当前自动化尚未接入馆员登录、创建、详情校验、数据库校验和清理闭环，因此该流程暂时 skip。
 
 ## 当前测试范围
 
@@ -186,7 +186,7 @@ TEST_AUTO_audit_log_for_consistency_test_...
 | logs | `GET /api/logs` 契约、分页、筛选、参数校验 | 已实现 |
 | books | `GET /books`、`GET /books/:id` 契约和异常 id | 已实现 |
 | db consistency | 接口响应与 SQLite 中 `Book`、`AuditLog` 记录一致性；日志测试会构造并清理 `TEST_AUTO_` 审计日志 | 已实现，依赖本地数据库文件 |
-| flow | 测试数据工厂；创建图书流程因无写接口跳过 | 部分实现，创建流 skip |
+| flow | 测试数据工厂；创建图书流程尚未接入馆员登录、创建、详情校验、数据库校验和清理闭环 | 部分实现，创建流 skip |
 
 ## 当前本地验证结果
 
@@ -206,7 +206,7 @@ pytest -v
 
 skipped 原因：
 
-- 当前后端无图书创建接口，创建图书流程用例跳过。
+- 后端已提供带馆员鉴权的图书写接口；当前自动化尚未接入馆员登录、创建、详情校验、数据库校验和清理闭环，因此该流程暂时 skip。
 
 阶段 9 已补充 `TEST_AUTO_` 审计日志构造与清理后，日志数据库一致性测试不再依赖已有 audit log。若 SQLite 数据库文件不存在，数据库一致性相关用例仍会按设计 skip。
 
